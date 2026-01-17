@@ -1,0 +1,13 @@
+{
+  "name": "killer-quiz-food-remaster-online",
+  "version": "2.1.0",
+  "private": true,
+  "description": "Killer Quiz online-ready (ws keepalive, /health, auto-join links) + food variable names",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Killer Quiz — Foodfight Remaster (Online)</title>
+  <style>
+    :root{
+      --bg:#070b12;
+      --panel: rgba(255,255,255,0.05);
+      --panel2: rgba(255,255,255,0.035);
+      --line: rgba(148,163,184,0.22);
+      --text:#e5e7eb;
+      --muted:#9aa7bd;
+      --good:#22c55e;
+      --bad:#ef4444;
+      --warn:#f59e0b;
+      --focus: rgba(34,197,94,0.25);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      color:var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background:
+        radial-gradient(900px 500px at 18% 0%, #172554, transparent 55%),
+        radial-gradient(900px 500px at 80% 10%, #14532d, transparent 52%),
+        radial-gradient(900px 500px at 50% 90%, #3b0764, transparent 55%),
+        var(--bg);
+    }
+    .wrap{max-width:1100px;margin:0 auto;padding:26px}
+    header{display:flex;gap:14px;align-items:flex-end;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap}
+    h1{margin:0;font-size:40px;letter-spacing:.5px}
+    .subtitle{margin:4px 0 0 0;color:var(--muted);max-width:70ch;line-height:1.35}
+    .badge{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);background:var(--panel2);
+      padding:8px 10px;border-radius:999px;color:var(--muted);font-size:12px}
+    .dot{width:9px;height:9px;border-radius:999px;background:var(--warn)}
+    .dot.ok{background:var(--good)}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px}
+    @media(min-width:1060px){ .grid{grid-template-columns: 1.2fr .8fr} }
+    .card{
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border-radius:18px;
+      padding:18px;
+      box-shadow: 0 14px 36px rgba(0,0,0,.45);
+      backdrop-filter: blur(8px);
+    }
+    .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+    label{display:flex;flex-direction:column;gap:6px;min-width:240px}
+    input{
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(2,6,23,.45);
+      color: var(--text);
+      padding:11px 12px;
+      outline:none;
+    }
+    input:focus{box-shadow: 0 0 0 4px var(--focus);}
+    button{
+      border:0;
+      border-radius:14px;
+      padding:11px 14px;
+      font-weight:900;
+      cursor:pointer;
+      color:#06120a;
+      background: var(--good);
+      transition: transform .06s ease, filter .12s ease;
+    }
+    button:hover{filter:brightness(1.05)}
+    button:active{transform: translateY(1px)}
+    button.secondary{background: rgba(2,6,23,.5); color:var(--text); border:1px solid var(--line)}
+    button.danger{background: var(--bad); color:#1a0505}
+    button:disabled{opacity:.55;cursor:not-allowed;filter:saturate(.5)}
+    .hint{color:var(--muted);font-size:14px;line-height:1.35;margin-top:10px}
+    .status{margin-top:10px;min-height:22px;color:var(--muted);line-height:1.35}
+    .sep{height:1px;background:var(--line);margin:14px 0}
+
+    .players{margin:12px 0 0 0;padding:0;list-style:none}
+    .players li{
+      display:flex;justify-content:space-between;align-items:center;
+      padding:12px 12px;border:1px solid var(--line);border-radius:14px;background: rgba(2,6,23,.42);
+      margin-top:10px;
+    }
+    .tag{font-size:12px;color:var(--muted)}
+    .tag.good{color:#86efac}
+    .tag.warn{color:#fde68a}
+    .tag.you{color:#bfdbfe}
+
+    .data{margin-top:12px;border:1px solid var(--line);border-radius:14px;background: rgba(2,6,23,.35);padding:12px}
+    .data h3{margin:0 0 8px 0;font-size:14px;color:var(--muted);letter-spacing:.2px}
+    pre{margin:0;white-space:pre-wrap;word-break:break-word;color:#cbd5e1;font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px}
+
+    .match{display:none;margin-top:14px}
+    .hpRow{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+    .hpBox{flex:1;min-width:240px}
+    .hpLabel{font-size:12px;color:var(--muted);margin-bottom:6px}
+    .hpBar{height:14px;border-radius:999px;border:1px solid var(--line);background: rgba(2,6,23,.45);overflow:hidden}
+    .hpFill{height:100%;width:100%;background: linear-gradient(90deg, var(--good), #86efac)}
+    .hpNum{margin-top:6px;font-weight:900;font-variant-numeric: tabular-nums}
+    .vs{font-weight:1000;color:var(--muted)}
+    .qWrap{margin-top:14px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 0}
+    .round{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12px;color:var(--muted)}
+    .qText{margin:10px 0 0 0;font-size:22px;line-height:1.25}
+    .answers{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+    @media(min-width:760px){ .answers{grid-template-columns:1fr 1fr 1fr} }
+    .ansBtn{text-align:left;background: rgba(2,6,23,.5); color:var(--text); border:1px solid var(--line);}
+    .ansBtn.correct{border-color: rgba(34,197,94,.9); box-shadow: 0 0 0 4px rgba(34,197,94,.12)}
+    .ansBtn.wrong{border-color: rgba(239,68,68,.9); box-shadow: 0 0 0 4px rgba(239,68,68,.12)}
+
+    .log{height:360px;overflow:auto;border:1px solid var(--line);border-radius:14px;background: rgba(2,6,23,.35);padding:12px}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+    .kbd{display:inline-block;padding:2px 7px;border-radius:10px;border:1px solid var(--line);background: rgba(255,255,255,.03);font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+    .mini{font-size:12px;color:var(--muted)}
+    a{color:#bfdbfe}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Killer Quiz</h1>
+        <p class="subtitle">
+          1v1. Ready up. Host starts. First <strong>correct</strong> answer per round lands damage.
+          <span class="mini">Share link: <span class="kbd">?room=CODE</span> to auto-join.</span>
+        </p>
+      </div>
+      <div class="badge"><span id="lampDot" class="dot"></span><span id="lampText">Disconnected</span></div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Lobby</h2>
+
+        <div class="row">
+          <label>
+            Room Code
+            <input id="roomCode" maxlength="8" placeholder="Leave blank and press Create" />
+          </label>
+          <button id="createBtn">Create</button>
+          <button id="joinBtn">Join</button>
+        </div>
+
+        <div class="hint">
+          Local dev: <span class="kbd">npm install</span> then <span class="kbd">npm start</span> → open <strong>http://localhost:3000</strong> twice.
+          <br/>
+          Online: deploy the folder; the game connects to the same domain automatically.
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row" style="align-items:center">
+          <div class="badge" style="border-radius:14px"><span>Room:</span> <strong id="roomLabel">—</strong></div>
+          <div style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap">
+            <button id="readyBtn" class="secondary" disabled>Ready</button>
+            <button id="playBtn" class="danger" disabled>Play</button>
+            <button id="copyBtn" class="secondary" disabled>Copy Link</button>
+            <button id="leaveBtn" class="secondary" disabled>Leave</button>
+          </div>
+        </div>
+
+        <ul id="playerList" class="players">
+          <li><div>Slot 1</div><div class="tag warn">EMPTY</div></li>
+          <li><div>Slot 2</div><div class="tag warn">EMPTY</div></li>
+        </ul>
+
+        <div class="data">
+          <h3>Lobby Data (last players packet)</h3>
+          <pre id="playersPacket">—</pre>
+        </div>
+
+        <div id="lobbyStatus" class="status">Create or join a room.</div>
+      </section>
+
+      <section class="card">
+        <h2>Debug Console</h2>
+        <div class="hint">If something fails online, the log will tell you what and when.</div>
+        <div id="log" class="log mono"></div>
+      </section>
+    </div>
+
+    <section id="matchCard" class="card match">
+      <div class="row" style="align-items:center;justify-content:space-between">
+        <h2 style="margin:0">Match</h2>
+        <button id="leaveBtn2" class="secondary">Leave</button>
+      </div>
+
+      <div class="hpRow" style="margin-top:10px">
+        <div class="hpBox">
+          <div class="hpLabel">You</div>
+          <div class="hpBar"><div id="hpYou" class="hpFill"></div></div>
+          <div id="hpYouNum" class="hpNum">100</div>
+        </div>
+        <div class="vs">VS</div>
+        <div class="hpBox">
+          <div class="hpLabel">Opponent</div>
+          <div class="hpBar"><div id="hpThem" class="hpFill"></div></div>
+          <div id="hpThemNum" class="hpNum">100</div>
+        </div>
+      </div>
+
+      <div class="qWrap">
+        <div class="round" id="roundPill">Round —</div>
+        <div class="qText" id="questionText">Waiting for question…</div>
+      </div>
+
+      <div class="answers">
+        <button class="ansBtn" id="ans0" disabled></button>
+        <button class="ansBtn" id="ans1" disabled></button>
+        <button class="ansBtn" id="ans2" disabled></button>
+      </div>
+
+      <div id="matchStatus" class="status"></div>
+    </section>
+  </div>
+
+  <script>
+    const QUESTION_BANK = [{"question": "What is the capital of France?", "choices": ["Paris", "Lyon", "Marseille"], "correctIndex": 0}, {"question": "Which planet is known as the Red Planet?", "choices": ["Venus", "Mars", "Jupiter"], "correctIndex": 1}, {"question": "What gas do plants absorb from the air?", "choices": ["Oxygen", "Nitrogen", "Carbon dioxide"], "correctIndex": 2}, {"question": "Which ocean is the largest?", "choices": ["Atlantic", "Pacific", "Indian"], "correctIndex": 1}, {"question": "How many continents are there?", "choices": ["5", "6", "7"], "correctIndex": 2}, {"question": "What is the chemical symbol for water?", "choices": ["H2O", "CO2", "NaCl"], "correctIndex": 0}, {"question": "Which animal is a mammal?", "choices": ["Shark", "Dolphin", "Salmon"], "correctIndex": 1}, {"question": "What is the capital of Japan?", "choices": ["Kyoto", "Osaka", "Tokyo"], "correctIndex": 2}, {"question": "Which metal is liquid at room temperature?", "choices": ["Mercury", "Iron", "Aluminum"], "correctIndex": 0}, {"question": "Which instrument has 88 keys?", "choices": ["Guitar", "Piano", "Violin"], "correctIndex": 1}, {"question": "What is the largest organ in the human body?", "choices": ["Skin", "Liver", "Heart"], "correctIndex": 0}, {"question": "Which country is famous for the pyramids of Giza?", "choices": ["Mexico", "Egypt", "India"], "correctIndex": 1}, {"question": "Which is a prime number?", "choices": ["21", "23", "25"], "correctIndex": 1}, {"question": "What is the freezing point of water in °C?", "choices": ["0", "32", "-10"], "correctIndex": 0}, {"question": "Which language is primarily spoken in Brazil?", "choices": ["Spanish", "Portuguese", "French"], "correctIndex": 1}, {"question": "What is the capital of Australia?", "choices": ["Sydney", "Canberra", "Melbourne"], "correctIndex": 1}, {"question": "Which planet has rings most famously?", "choices": ["Saturn", "Earth", "Mars"], "correctIndex": 0}, {"question": "What do bees collect from flowers?", "choices": ["Nectar", "Dew", "Sap"], "correctIndex": 0}, {"question": "Which is the smallest prime number?", "choices": ["0", "1", "2"], "correctIndex": 2}, {"question": "How many sides does a hexagon have?", "choices": ["5", "6", "8"], "correctIndex": 1}, {"question": "Which is a renewable energy source?", "choices": ["Coal", "Wind", "Oil"], "correctIndex": 1}, {"question": "What is the capital of Canada?", "choices": ["Toronto", "Ottawa", "Vancouver"], "correctIndex": 1}, {"question": "Which continent is the Sahara Desert on?", "choices": ["Asia", "Africa", "Australia"], "correctIndex": 1}, {"question": "Which is the fastest land animal?", "choices": ["Cheetah", "Lion", "Horse"], "correctIndex": 0}, {"question": "Which blood type is known as the universal donor?", "choices": ["O negative", "AB positive", "A positive"], "correctIndex": 0}, {"question": "Which is the largest planet in our solar system?", "choices": ["Jupiter", "Saturn", "Neptune"], "correctIndex": 0}, {"question": "Which organ pumps blood through the body?", "choices": ["Lung", "Heart", "Kidney"], "correctIndex": 1}, {"question": "What is the capital of New Zealand?", "choices": ["Auckland", "Wellington", "Christchurch"], "correctIndex": 1}, {"question": "Which substance has the chemical formula NaCl?", "choices": ["Sugar", "Salt", "Baking soda"], "correctIndex": 1}, {"question": "Which is a type of triangle with all sides equal?", "choices": ["Scalene", "Isosceles", "Equilateral"], "correctIndex": 2}, {"question": "What is the capital of Spain?", "choices": ["Barcelona", "Madrid", "Seville"], "correctIndex": 1}, {"question": "Which is the largest mammal?", "choices": ["Elephant", "Blue whale", "Giraffe"], "correctIndex": 1}, {"question": "Which is the closest star to Earth?", "choices": ["Polaris", "Sirius", "The Sun"], "correctIndex": 2}, {"question": "Which is the largest continent by area?", "choices": ["Africa", "Asia", "Europe"], "correctIndex": 1}, {"question": "Which is the largest desert (by area)?", "choices": ["Sahara", "Antarctic Desert", "Gobi"], "correctIndex": 1}, {"question": "What is the capital of the United Kingdom?", "choices": ["London", "Manchester", "Edinburgh"], "correctIndex": 0}, {"question": "How many days are in a leap year?", "choices": ["365", "366", "367"], "correctIndex": 1}, {"question": "Which is the largest bone in the human body?", "choices": ["Femur", "Skull", "Rib"], "correctIndex": 0}, {"question": "What is the capital of South Korea?", "choices": ["Busan", "Seoul", "Incheon"], "correctIndex": 1}, {"question": "How many letters are in the English alphabet?", "choices": ["24", "25", "26"], "correctIndex": 2}, {"question": "Which is a common web markup language?", "choices": ["HTML", "SQL", "PNG"], "correctIndex": 0}, {"question": "What is the capital of the USA?", "choices": ["New York", "Washington, D.C.", "Los Angeles"], "correctIndex": 1}, {"question": "Which is a famous painting by Leonardo da Vinci?", "choices": ["Mona Lisa", "Starry Night", "The Scream"], "correctIndex": 0}, {"question": "What is the capital of China?", "choices": ["Shanghai", "Beijing", "Guangzhou"], "correctIndex": 1}, {"question": "Which is the hardest natural substance?", "choices": ["Diamond", "Gold", "Quartz"], "correctIndex": 0}, {"question": "Which month has 28 days in a common year?", "choices": ["February", "June", "All months have at least 28 days"], "correctIndex": 2}, {"question": "What is the capital of India?", "choices": ["Mumbai", "New Delhi", "Bangalore"], "correctIndex": 1}, {"question": "Which continent is Australia in?", "choices": ["Australia/Oceania", "Europe", "South America"], "correctIndex": 0}, {"question": "Which is the smallest continent by area?", "choices": ["Europe", "Australia", "Antarctica"], "correctIndex": 1}, {"question": "What is the capital of Sweden?", "choices": ["Stockholm", "Gothenburg", "Malmö"], "correctIndex": 0}, {"question": "What is the capital of Norway?", "choices": ["Oslo", "Bergen", "Trondheim"], "correctIndex": 0}, {"question": "Which is a gas in Earth's atmosphere?", "choices": ["Oxygen", "Granite", "Steel"], "correctIndex": 0}, {"question": "Which is a type of rock?", "choices": ["Igneous", "Gaseous", "Liquid"], "correctIndex": 0}, {"question": "Which is a browser?", "choices": ["Chrome", "Python", "Windows"], "correctIndex": 0}, {"question": "What is 50 + 17?", "choices": ["74", "67", "64"], "correctIndex": 1}, {"question": "What is 38 − 3?", "choices": ["38", "35", "28"], "correctIndex": 1}, {"question": "What is 12 × 9?", "choices": ["105", "101", "108"], "correctIndex": 2}, {"question": "What is 24 + 42?", "choices": ["68", "66", "59"], "correctIndex": 1}, {"question": "What is 93 − 9?", "choices": ["84", "78", "85"], "correctIndex": 0}, {"question": "What is 3 × 5?", "choices": ["15", "20", "18"], "correctIndex": 0}, {"question": "What is 19 + 23?", "choices": ["35", "41", "42"], "correctIndex": 2}, {"question": "What is 22 − 6?", "choices": ["22", "16", "15"], "correctIndex": 1}, {"question": "What is 10 × 11?", "choices": ["115", "107", "110"], "correctIndex": 2}, {"question": "What is 50 + 49?", "choices": ["98", "105", "99"], "correctIndex": 2}, {"question": "What is 15 − 4?", "choices": ["10", "4", "11"], "correctIndex": 2}, {"question": "What is 9 × 7?", "choices": ["70", "63", "64"], "correctIndex": 1}, {"question": "What is 33 + 32?", "choices": ["72", "65", "63"], "correctIndex": 1}, {"question": "What is 87 − 3?", "choices": ["86", "91", "84"], "correctIndex": 2}, {"question": "What is 10 × 9?", "choices": ["89", "90", "97"], "correctIndex": 1}, {"question": "What is 53 + 30?", "choices": ["77", "80", "83"], "correctIndex": 2}, {"question": "What is 61 − 5?", "choices": ["56", "53", "50"], "correctIndex": 0}, {"question": "What is 6 × 10?", "choices": ["67", "60", "61"], "correctIndex": 1}, {"question": "What is 26 + 18?", "choices": ["44", "42", "51"], "correctIndex": 0}, {"question": "What is 84 − 7?", "choices": ["82", "77", "79"], "correctIndex": 1}, {"question": "What is 5 × 11?", "choices": ["56", "48", "55"], "correctIndex": 2}, {"question": "What is 19 + 50?", "choices": ["76", "69", "67"], "correctIndex": 1}, {"question": "What is 59 − 7?", "choices": ["52", "54", "57"], "correctIndex": 0}, {"question": "What is 11 × 3?", "choices": ["40", "36", "33"], "correctIndex": 2}, {"question": "What is 59 + 51?", "choices": ["110", "103", "109"], "correctIndex": 0}, {"question": "What is 30 − 8?", "choices": ["22", "19", "29"], "correctIndex": 0}, {"question": "What is 11 × 5?", "choices": ["55", "57", "48"], "correctIndex": 0}, {"question": "What is 50 + 42?", "choices": ["86", "94", "92"], "correctIndex": 2}, {"question": "What is 30 − 9?", "choices": ["21", "23", "14"], "correctIndex": 0}, {"question": "What is 10 × 3?", "choices": ["25", "30", "27"], "correctIndex": 1}, {"question": "What is 13 + 25?", "choices": ["31", "40", "38"], "correctIndex": 2}, {"question": "What is 18 − 9?", "choices": ["9", "7", "3"], "correctIndex": 0}, {"question": "What is 6 × 11?", "choices": ["73", "69", "66"], "correctIndex": 2}, {"question": "What is 35 + 52?", "choices": ["87", "82", "90"], "correctIndex": 0}, {"question": "What is 25 − 4?", "choices": ["14", "21", "19"], "correctIndex": 1}, {"question": "What is 12 × 11?", "choices": ["130", "138", "132"], "correctIndex": 2}, {"question": "What is 14 + 55?", "choices": ["72", "62", "69"], "correctIndex": 2}, {"question": "What is 14 − 6?", "choices": ["14", "5", "8"], "correctIndex": 2}, {"question": "What is 10 × 6?", "choices": ["60", "62", "54"], "correctIndex": 0}, {"question": "What is 25 + 60?", "choices": ["86", "90", "85"], "correctIndex": 2}, {"question": "What is 22 − 7?", "choices": ["15", "20", "14"], "correctIndex": 0}, {"question": "What is 3 × 4?", "choices": ["12", "9", "17"], "correctIndex": 0}, {"question": "What is 16 + 25?", "choices": ["41", "39", "35"], "correctIndex": 0}, {"question": "What is 27 − 7?", "choices": ["15", "20", "18"], "correctIndex": 1}, {"question": "What is 4 × 10?", "choices": ["42", "33", "40"], "correctIndex": 2}, {"question": "What is 15 + 58?", "choices": ["73", "67", "71"], "correctIndex": 0}];
+  </script>
+
+  <script>
+  (() => {
+    // Food-named variables (internal only)
+    const baguetteRoomInput = document.getElementById('roomCode');
+    const briocheRoomLabel = document.getElementById('roomLabel');
+    const basilStatus = document.getElementById('lobbyStatus');
+
+    const burritoCreate = document.getElementById('createBtn');
+    const baklavaJoin = document.getElementById('joinBtn');
+    const ramenReady = document.getElementById('readyBtn');
+    const tacoPlay = document.getElementById('playBtn');
+    const cookieCopy = document.getElementById('copyBtn');
+    const donutLeave = document.getElementById('leaveBtn');
+    const donutLeave2 = document.getElementById('leaveBtn2');
+
+    const lettucePlayers = document.getElementById('playerList');
+    const mangoPacket = document.getElementById('playersPacket');
+
+    const matchCard = document.getElementById('matchCard');
+    const matchStatus = document.getElementById('matchStatus');
+    const roundPill = document.getElementById('roundPill');
+    const questionText = document.getElementById('questionText');
+    const lampDot = document.getElementById('lampDot');
+    const lampText = document.getElementById('lampText');
+
+    const hpYou = document.getElementById('hpYou');
+    const hpThem = document.getElementById('hpThem');
+    const hpYouNum = document.getElementById('hpYouNum');
+    const hpThemNum = document.getElementById('hpThemNum');
+
+    const noodleAnswers = [
+      document.getElementById('ans0'),
+      document.getElementById('ans1'),
+      document.getElementById('ans2'),
+    ];
+
+    const logBox = document.getElementById('log');
+    function toastLog(line){
+      const ts = new Date().toLocaleTimeString();
+      logBox.textContent += `[${ts}] ${line}\n`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+    function toastJson(prefix, obj){
+      try { toastLog(prefix + ' ' + JSON.stringify(obj)); }
+      catch { toastLog(prefix + ' [unserializable]'); }
+    }
+    function htmlEscape(s){
+      return String(s)
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'","&#039;");
+    }
+
+    let waffleSocket = null;
+    let pizzaSlice = null;        // playerIndex 0/1
+    let headChef = null;          // hostPlayer 0/1
+    let soupRoom = null;          // roomCode
+    let lasagnaRoundId = null;
+    let pretzelLocked = false;
+    let matchCooking = false;
+
+    let connectedOvens = [false,false];
+    let readyPlates = [false,false];
+
+    function setLamp(ok){
+      if(ok){
+        lampDot.classList.add('ok');
+        lampText.textContent = 'Connected';
+      } else {
+        lampDot.classList.remove('ok');
+        lampText.textContent = 'Disconnected';
+      }
+    }
+
+    function normalizeRoom(s){
+      return (s || '').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+    }
+
+    function makeRoomCode(){
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let out = '';
+      for(let i=0;i<6;i++) out += chars[Math.floor(Math.random()*chars.length)];
+      return out;
+    }
+
+    function setLobbyStatus(msg){ basilStatus.textContent = msg || ''; }
+    function setMatchStatus(msg){ matchStatus.textContent = msg || ''; }
+
+    function enableAnswers(on){ noodleAnswers.forEach(b => b.disabled = !on); }
+    function clearAnswerClasses(){ noodleAnswers.forEach(b => b.classList.remove('correct','wrong')); }
+
+    function setHp(you, them){
+      const clamp = x => Math.max(0, Math.min(100, x));
+      you = clamp(you); them = clamp(them);
+      hpYou.style.width = you + '%';
+      hpThem.style.width = them + '%';
+      hpYouNum.textContent = String(you);
+      hpThemNum.textContent = String(them);
+      hpYou.style.filter = (you <= 30) ? 'hue-rotate(320deg) saturate(1.2)' : '';
+      hpThem.style.filter = (them <= 30) ? 'hue-rotate(320deg) saturate(1.2)' : '';
+    }
+
+    function renderLobby(){
+      lettucePlayers.innerHTML = '';
+      for(let i=0;i<2;i++){
+        const li = document.createElement('li');
+        const left = document.createElement('div');
+        const right = document.createElement('div');
+        right.className = 'tag';
+
+        const isConn = connectedOvens[i];
+        const isReady = readyPlates[i];
+
+        left.textContent = isConn ? `Player ${i+1}` : `Slot ${i+1}`;
+
+        const tags = [];
+        if(i === headChef) tags.push('HOST');
+        if(i === pizzaSlice) tags.push('YOU');
+
+        if(!isConn){
+          tags.push('EMPTY');
+          right.classList.add('warn');
+        } else if(!isReady){
+          tags.push('CONNECTED');
+          tags.push('NOT READY');
+          right.classList.add('warn');
+        } else {
+          tags.push('READY');
+          right.classList.add('good');
+        }
+        if(i === pizzaSlice) right.classList.add('you');
+
+        right.textContent = tags.join(' · ');
+        li.appendChild(left);
+        li.appendChild(right);
+        lettucePlayers.appendChild(li);
+      }
+
+      const bothReady = readyPlates[0] && readyPlates[1];
+      const iAmHost = (pizzaSlice === headChef);
+      tacoPlay.disabled = !(bothReady && iAmHost && !matchCooking);
+      tacoPlay.textContent = iAmHost ? (bothReady ? 'Play' : 'Play (need both Ready)') : 'Play (host only)';
+
+      const iAmConnected = (pizzaSlice !== null && connectedOvens[pizzaSlice]);
+      ramenReady.disabled = !iAmConnected || matchCooking;
+      ramenReady.textContent = iAmConnected ? (readyPlates[pizzaSlice] ? 'Unready' : 'Ready') : 'Ready';
+
+      cookieCopy.disabled = !soupRoom;
+      donutLeave.disabled = !soupRoom;
+    }
+
+    function showPlayersPacket(packet){
+      mangoPacket.innerHTML = htmlEscape(JSON.stringify(packet, null, 2));
+    }
+
+    function getWsUrl(){
+      // Optional override if you host HTML separately:
+      // window.KQ_SERVER = "wss://your-server-domain";
+      if (window.KQ_SERVER) return window.KQ_SERVER;
+      return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+    }
+
+    function connectAndJoin(kind){
+      // Connect immediately after create/join click (no extra step).
+      let code = normalizeRoom(baguetteRoomInput.value);
+
+      if(kind === 'create'){
+        if(!code){
+          code = makeRoomCode();
+          baguetteRoomInput.value = code;
+        }
+      } else {
+        if(!code) return setLobbyStatus('Enter a room code (letters/numbers).');
+      }
+
+      soupRoom = code;
+      briocheRoomLabel.textContent = soupRoom;
+
+      const wsUrl = getWsUrl();
+      toastLog('Opening WebSocket: ' + wsUrl);
+      waffleSocket = new WebSocket(wsUrl);
+
+      waffleSocket.onopen = () => {
+        setLamp(true);
+        setLobbyStatus('Connected. Joining…');
+        toastLog('WebSocket open. Sending ' + kind + ' for ' + soupRoom);
+        waffleSocket.send(JSON.stringify({ type: kind, roomCode: soupRoom }));
+      };
+
+      waffleSocket.onerror = () => {
+        setLamp(false);
+        toastLog('WebSocket error. (Online: your host might not support WS, or wrong URL.)');
+        setLobbyStatus('Connection error. Check your deployed server URL.');
+      };
+
+      waffleSocket.onclose = () => {
+        setLamp(false);
+        toastLog('WebSocket closed.');
+        setLobbyStatus('Disconnected.');
+        waffleSocket = null;
+      };
+
+      waffleSocket.onmessage = (ev) => {
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch { return; }
+
+        if(msg.type === 'joined'){
+          toastJson('<= joined', msg);
+          pizzaSlice = msg.playerIndex;
+          soupRoom = msg.roomCode;
+          briocheRoomLabel.textContent = soupRoom;
+          matchCooking = false;
+          setLobbyStatus(`Joined ${soupRoom} as Player ${pizzaSlice+1}. Press Ready.`);
+          // update share link immediately
+          try { history.replaceState(null, '', `?room=${encodeURIComponent(soupRoom)}`); } catch {}
+          return;
+        }
+
+        if(msg.type === 'players'){
+          toastJson('<= players', msg);
+          headChef = msg.hostPlayer;
+          connectedOvens = msg.connected;
+          readyPlates = msg.ready;
+          showPlayersPacket(msg);
+          renderLobby();
+
+          if(pizzaSlice === null) setLobbyStatus('Waiting for join confirmation…');
+          else if(!connectedOvens[pizzaSlice]) setLobbyStatus('You are not marked connected (server issue).');
+          else if(!readyPlates[pizzaSlice]) setLobbyStatus('Press Ready to fill your slot.');
+          else if(!readyPlates[1 - pizzaSlice]) setLobbyStatus('Waiting for opponent to Ready…');
+          else setLobbyStatus('Both Ready. Host may press Play.');
+          return;
+        }
+
+        if(msg.type === 'ready_changed'){
+          toastJson('<= ready_changed', msg);
+          return;
+        }
+
+        if(msg.type === 'start'){
+          matchCooking = true;
+          matchCard.style.display = 'block';
+          setMatchStatus('Match started.');
+          setHp(msg.health[pizzaSlice], msg.health[1-pizzaSlice]);
+          return;
+        }
+
+        if(msg.type === 'question'){
+          lasagnaRoundId = msg.roundId;
+          pretzelLocked = false;
+          clearAnswerClasses();
+          roundPill.textContent = 'Round ' + msg.roundNumber;
+          questionText.textContent = msg.q.question;
+          noodleAnswers[0].textContent = msg.q.a;
+          noodleAnswers[1].textContent = msg.q.b;
+          noodleAnswers[2].textContent = msg.q.c;
+          enableAnswers(true);
+          setMatchStatus('Answer fast.');
+          return;
+        }
+
+        if(msg.type === 'result'){
+          enableAnswers(false);
+          noodleAnswers.forEach((b, i) => { if(i === msg.correctIndex) b.classList.add('correct'); });
+          setHp(msg.health[pizzaSlice], msg.health[1-pizzaSlice]);
+
+          if(msg.roundWinnerPlayer === null) setMatchStatus('No-one got it right. Next question…');
+          else if(msg.roundWinnerPlayer === pizzaSlice) setMatchStatus('You were first — you hit!');
+          else setMatchStatus('Opponent was first — you got hit.');
+          return;
+        }
+
+        if(msg.type === 'gameover'){
+          enableAnswers(false);
+          setHp(msg.health[pizzaSlice], msg.health[1-pizzaSlice]);
+          if(msg.winnerPlayer === pizzaSlice) setMatchStatus('Victory. You reduced them to 0.');
+          else if(msg.winnerPlayer === null) setMatchStatus('Match ended (disconnect).');
+          else setMatchStatus('Defeat. You hit 0.');
+          matchCooking = false;
+          return;
+        }
+
+        if(msg.type === 'error'){
+          toastJson('<= error', msg);
+          setLobbyStatus(msg.message || 'Error.');
+          return;
+        }
+
+        toastLog('<= ' + msg.type);
+      };
+    }
+
+    function sendOrScold(obj){
+      if(!waffleSocket || waffleSocket.readyState !== 1){
+        toastLog('Cannot send — socket is not open.');
+        return false;
+      }
+      waffleSocket.send(JSON.stringify(obj));
+      return true;
+    }
+
+    function leaveRoom(){
+      if(soupRoom && waffleSocket && waffleSocket.readyState === 1){
+        sendOrScold({ type:'leave', roomCode: soupRoom });
+        waffleSocket.close();
+      }
+      waffleSocket = null;
+      pizzaSlice = null;
+      headChef = null;
+      soupRoom = null;
+      lasagnaRoundId = null;
+      pretzelLocked = false;
+      matchCooking = false;
+      connectedOvens = [false,false];
+      readyPlates = [false,false];
+
+      briocheRoomLabel.textContent = '—';
+      mangoPacket.textContent = '—';
+      matchCard.style.display = 'none';
+      enableAnswers(false);
+      renderLobby();
+      setLobbyStatus('Left room.');
+      try { history.replaceState(null, '', location.pathname); } catch {}
+    }
+
+    burritoCreate.addEventListener('click', () => connectAndJoin('create'));
+    baklavaJoin.addEventListener('click', () => connectAndJoin('join'));
+
+    ramenReady.addEventListener('click', () => {
+      if(!soupRoom) return;
+      toastLog('=> toggle_ready');
+      sendOrScold({ type:'toggle_ready', roomCode: soupRoom });
+    });
+
+    tacoPlay.addEventListener('click', () => {
+      if(!soupRoom) return;
+      toastLog('=> start_game');
+      sendOrScold({ type:'start_game', roomCode: soupRoom });
+    });
+
+    cookieCopy.addEventListener('click', async () => {
+      if(!soupRoom) return;
+      const link = `${location.origin}${location.pathname}?room=${encodeURIComponent(soupRoom)}`;
+      try { await navigator.clipboard.writeText(link); setLobbyStatus('Copied invite link.'); }
+      catch { setLobbyStatus('Could not copy link (browser blocked).'); }
+    });
+
+    donutLeave.addEventListener('click', leaveRoom);
+    donutLeave2.addEventListener('click', leaveRoom);
+
+    noodleAnswers.forEach((btn, idx) => {
+      btn.addEventListener('click', () => {
+        if(pretzelLocked) return;
+        if(!soupRoom || lasagnaRoundId === null) return;
+        pretzelLocked = true;
+        enableAnswers(false);
+        btn.classList.add('wrong');
+        sendOrScold({ type:'answer', roomCode: soupRoom, roundId: lasagnaRoundId, choiceIndex: idx });
+        setMatchStatus('Answer locked. Waiting…');
+      });
+    });
+
+    // Auto-connect: if URL has ?room=CODE, auto-join on load
+    const params = new URLSearchParams(location.search);
+    const autoRoom = normalizeRoom(params.get('room') || '');
+    if(autoRoom){
+      baguetteRoomInput.value = autoRoom;
+      toastLog('Auto-joining room from URL: ' + autoRoom);
+      connectAndJoin('join');
+    }
+
+    setLamp(false);
+    renderLobby();
+    toastLog('Ready.');
+  })();
+  </script>
+</body>
+</html>
