@@ -2,6 +2,8 @@ name: TempoWeave Standalone Check
 on:
   push:
     branches: [tempoweave-v4-build]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 jobs:
   validate:
