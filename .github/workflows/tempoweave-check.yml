@@ -44,3 +44,13 @@ jobs:
           for name, ok in checks.items(): print(('PASS' if ok else 'FAIL'), name)
           assert not failed, 'Failed checks: ' + ', '.join(failed)
           PY
+      - name: Build release ZIP
+        run: zip -j TempoWeave_Studio_v4.0.zip TempoWeave_Studio_v4.0_Standalone.html
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: TempoWeave-Studio-v4.0
+          path: |
+            TempoWeave_Studio_v4.0_Standalone.html
+            TempoWeave_Studio_v4.0.zip
+          if-no-files-found: error
