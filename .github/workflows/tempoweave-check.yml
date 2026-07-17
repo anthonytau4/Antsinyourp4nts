@@ -1,0 +1,44 @@
+name: TempoWeave Standalone Check
+on:
+  push:
+    branches: [tempoweave-v4-build]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract inline JavaScript
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path('TempoWeave_Studio_v4.0_Standalone.html').read_text(encoding='utf-8')
+          scripts = re.findall(r'<script>([\s\S]*?)</script>', html)
+          assert scripts, 'No inline script found'
+          Path('/tmp/tempoweave.js').write_text('\n'.join(scripts), encoding='utf-8')
+          print('Extracted', len(scripts), 'script block(s)')
+          PY
+      - name: Check JavaScript syntax
+        run: node --check /tmp/tempoweave.js
+      - name: Run static regression checks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path('TempoWeave_Studio_v4.0_Standalone.html').read_text(encoding='utf-8')
+          checks = {
+            'separate marquee overlay': 'id="marquee"' in html and 'class="marquee hidden"' in html,
+            'explicit slide command': 'Connect selected with slide' in html,
+            'selection does not call slides': "function beginMarquee" in html and "String(beginMarquee).includes('connectSlides')" in html,
+            'selected-only strength': 'Quantize selected' in html and 'selectedNotes' in html,
+            'automation parameters': all(x in html for x in ['volume','pan','pitch','velocity','filter','resonance','reverb','delay','drive','width','denoise']),
+            'offline WAV renderer': 'OfflineAudioContext' in html,
+            'local persistence': 'localStorage.setItem' in html and 'indexedDB.open' in html,
+            'recording': 'MediaRecorder' in html,
+            'tempo pitch modes': 'Pitch follows tempo' in html and "value=\"preserve\"" in html,
+            'no external runtime dependencies': '<script src=' not in html and '<link rel=' not in html,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          for name, ok in checks.items(): print(('PASS' if ok else 'FAIL'), name)
+          assert not failed, 'Failed checks: ' + ', '.join(failed)
+          PY
