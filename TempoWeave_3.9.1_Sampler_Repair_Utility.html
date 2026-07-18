@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TempoWeave 3.9.1 Sampler Repair</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,Segoe UI,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 20% 10%,#302650,transparent 35%),#0c0e13;color:#eef1f7}.card{width:min(760px,92vw);border:1px solid #434955;background:#1a1d23;padding:28px;box-shadow:0 30px 90px #0008}.eyebrow{font-size:10px;font-weight:900;letter-spacing:.16em;color:#75e7d3}.title{font-size:32px;line-height:1.05;margin:8px 0 12px}.copy{color:#aeb5c1;line-height:1.65}.drop{display:block;margin:22px 0;padding:30px;border:2px dashed #596271;background:#121419;text-align:center;cursor:pointer}.drop:hover{border-color:#72e8d5;background:#16211f}.drop strong{display:block;font-size:16px}.drop span{display:block;margin-top:7px;color:#8f98a5;font-size:12px}.drop input{display:none}.status{min-height:48px;border:1px solid #343a44;background:#111318;padding:12px;font:12px ui-monospace,Consolas,monospace;color:#aeb7c5;white-space:pre-wrap}.status.ok{border-color:#3a756c;color:#a7f5e7}.status.bad{border-color:#894457;color:#ffafbf}.notes{margin-top:18px;padding:14px;border-left:3px solid #8e66e8;background:#15171c;color:#b7bec8;font-size:12px;line-height:1.6}button{border:1px solid #4c5562;background:#2b3038;color:#fff;padding:10px 14px;font-weight:800;cursor:pointer}button:disabled{opacity:.4;cursor:not-allowed}.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+</style>
+</head>
+<body>
+<main class="card">
+<div class="eyebrow">TEMPOWEAVE EMERGENCY REPAIR</div>
+<h1 class="title">Repair the 3.9 sampler without touching your audio.</h1>
+<p class="copy">Choose your broken <b>TempoWeave_Studio_v3.9_Standalone.html</b>. This creates a new <b>3.9.1 Sampler Repair</b> HTML. Your original file is never overwritten.</p>
+<label class="drop"><strong>Select the TempoWeave 3.9 HTML</strong><span>The repaired standalone downloads automatically.</span><input id="sourceFile" type="file" accept=".html,text/html"></label>
+<div class="status" id="status">Waiting for the 3.9 HTML…</div>
+<div class="notes"><b>The repair:</b> validates both cut markers, prevents zero-length or corrupt ranges, saves sampler properties and trim points in one operation, repairs already-invalid metadata, uses the same safe playback path for preview/live/WAV, falls back to the untouched source when an edit is invalid, and makes Edit Sampler prefer the currently selected sampler or drum pad instead of a stale library selection.</div>
+<div class="actions"><button id="again" disabled>Choose another file</button></div>
+</main>
+<script type="text/plain" id="twPatch">
+
+/* ===== TempoWeave 3.9.1 — sampler safety repair ===== */
+const TW391_MIN_SAMPLE_SECONDS=.008;
+function tw391Num(value,fallback){const n=Number(value);return Number.isFinite(n)?n:fallback;}
+function tw391Clamp(value,min,max,fallback=min){return Math.min(max,Math.max(min,tw391Num(value,fallback)));}
+function tw391Bounds(buffer,owner={},asset={}){
+  const total=Math.max(TW391_MIN_SAMPLE_SECONDS,tw391Num(buffer?.duration,0));
+  let start=tw391Clamp(owner.trimStart??asset.trimStart??0,0,Math.max(0,total-TW391_MIN_SAMPLE_SECONDS),0);
+  let end=tw391Clamp(owner.trimEnd??asset.trimEnd??total,TW391_MIN_SAMPLE_SECONDS,total,total);
+  if(end-start<TW391_MIN_SAMPLE_SECONDS){start=0;end=total;}
+  return{start,end,duration:Math.max(TW391_MIN_SAMPLE_SECONDS,end-start)};
+}
+function tw391Meta(owner={},asset={}){
+  return{
+    gain:tw391Clamp(owner.gain??asset.gain??1,0,2,1),
+    tune:tw391Clamp(owner.tune??asset.tune??0,-24,24,0),
+    reverse:!!(owner.reverse??asset.reverse),
+    fadeIn:tw391Clamp(owner.fadeIn??asset.fadeIn??.003,0,2,.003),
+    fadeOut:tw391Clamp(owner.fadeOut??asset.fadeOut??.02,0,3,.02)
+  };
+}
+const tw391ReverseByContext=new WeakMap();
+function tw391ReverseBuffer(ctx,buffer){
+  let byBuffer=tw391ReverseByContext.get(ctx);if(!byBuffer){byBuffer=new WeakMap();tw391ReverseByContext.set(ctx,byBuffer);}if(byBuffer.has(buffer))return byBuffer.get(buffer);
+  const out=ctx.createBuffer(buffer.numberOfChannels,buffer.length,buffer.sampleRate);
+  for(let ch=0;ch<buffer.numberOfChannels;ch++){const source=buffer.getChannelData(ch),dest=out.getChannelData(ch);for(let i=0,j=source.length-1;i<source.length;i++,j--)dest[i]=source[j];}
+  byBuffer.set(buffer,out);return out;
+}
+function tw391Start(ctx,buffer,destination,bounds,meta,startTime,rate,level,maxSourceDuration=null){
+  const safeRate=tw391Clamp(rate,1/32,32,1),safeLevel=tw391Clamp(level,0,2,0.8),playBuffer=meta.reverse?tw391ReverseBuffer(ctx,buffer):buffer;
+  const offset=meta.reverse?Math.max(0,playBuffer.duration-bounds.end):bounds.start;
+  const available=Math.max(TW391_MIN_SAMPLE_SECONDS,playBuffer.duration-offset);
+  const requested=maxSourceDuration==null?bounds.duration:tw391Num(maxSourceDuration,bounds.duration);
+  const sourceDuration=Math.min(bounds.duration,available,Math.max(TW391_MIN_SAMPLE_SECONDS,requested));
+  if(!Number.isFinite(offset)||!Number.isFinite(sourceDuration)||sourceDuration<TW391_MIN_SAMPLE_SECONDS)throw new Error('Invalid playable sample range');
+  const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=playBuffer;source.playbackRate.setValueAtTime(safeRate,startTime);source.connect(gain).connect(destination);
+  const audible=Math.max(TW391_MIN_SAMPLE_SECONDS,sourceDuration/safeRate),finish=startTime+audible,fadeIn=Math.min(meta.fadeIn,audible*.45),fadeOut=Math.min(meta.fadeOut,audible*.45);
+  gain.gain.cancelScheduledValues(startTime);gain.gain.setValueAtTime(fadeIn?.0001:safeLevel,startTime);if(fadeIn)gain.gain.linearRampToValueAtTime(safeLevel,startTime+fadeIn);gain.gain.setValueAtTime(safeLevel,Math.max(startTime+fadeIn,finish-fadeOut));if(fadeOut)gain.gain.linearRampToValueAtTime(.0001,finish);
+  source.start(startTime,offset,sourceDuration);try{source.stop(finish+.04);}catch(_){}
+  return source;
+}
+async function tw391RepairAsset(asset){
+  if(!asset?.id||asset.kind!=='oneshot')return false;let changed=false;const duration=Math.max(TW391_MIN_SAMPLE_SECONDS,tw391Num(asset.duration,0));
+  let start=tw391Clamp(asset.trimStart??0,0,Math.max(0,duration-TW391_MIN_SAMPLE_SECONDS),0),end=tw391Clamp(asset.trimEnd??duration,TW391_MIN_SAMPLE_SECONDS,duration,duration);
+  if(end-start<TW391_MIN_SAMPLE_SECONDS){start=0;end=duration;changed=true;}
+  const next={trimStart:start,trimEnd:end,gain:tw391Clamp(asset.gain??1,0,2,1),tune:tw391Clamp(asset.tune??0,-24,24,0),fadeIn:tw391Clamp(asset.fadeIn??.003,0,2,.003),fadeOut:tw391Clamp(asset.fadeOut??.02,0,3,.02),reverse:!!asset.reverse};
+  for(const [key,value] of Object.entries(next))if(asset[key]!==value){asset[key]=value;changed=true;}
+  if(changed)await idbPut('assets',asset);return changed;
+}
+async function tw391RepairLibrary(){
+  try{const assets=await idbGetAll('assets');let fixed=0;for(const asset of assets)if(await tw391RepairAsset(asset))fixed++;if(fixed){engine.assetBuffers.clear();await renderAssets();toast('Sampler data repaired',`${fixed} cached sample${fixed===1?'':'s'} had unsafe edit values and were restored to playable ranges.`);}}catch(err){console.warn('Sampler repair scan failed',err);}
+}
+function tw391RepairProjectSlots(){
+  if(!project)return;for(const track of project.tracks||[]){if(track.type!=='drum')continue;const rack=tw37EnsureDrumRack(track);for(const slot of Object.values(rack?.slots||{})){slot.gain=tw391Clamp(slot.gain??1,0,2,1);slot.tune=tw391Clamp(slot.tune??0,-24,24,0);slot.fadeIn=tw391Clamp(slot.fadeIn??.003,0,2,.003);slot.fadeOut=tw391Clamp(slot.fadeOut??.02,0,3,.02);slot.reverse=!!slot.reverse;if(slot.trimEnd!=null&&(!Number.isFinite(+slot.trimStart)||!Number.isFinite(+slot.trimEnd)||+slot.trimEnd-+slot.trimStart<TW391_MIN_SAMPLE_SECONDS)){slot.trimStart=0;slot.trimEnd=null;}}}
+}
+const tw391OldResolveSoundTarget=tw39ResolveSoundTarget;
+tw39ResolveSoundTarget=function(){
+  const track=currentTrack();
+  if(track?.type==='sampler'&&track.instrument?.sampleId){const asset=cachedAssets.find(x=>x.id===track.instrument.sampleId);return{assetId:track.instrument.sampleId,asset,kind:'sampler',trackId:track.id};}
+  if(track?.type==='drum'){
+    const clip=currentClip(),note=(clip?.notes||[]).find(x=>x.id===selectedNoteId)||(clip?.notes||[]).find(x=>selectedNoteIds.has(x.id));const lane=note?TW37_DRUM_BY_PITCH.get(Math.round(note.pitch)):null;let slotId=lane?.id;if(!slotId)slotId=Object.keys(track.drumRack?.slots||{}).find(id=>track.drumRack.slots[id].assetId);const slot=slotId?tw37DrumSlot(track,slotId):null;if(slot?.assetId){const asset=cachedAssets.find(x=>x.id===slot.assetId);return{assetId:slot.assetId,asset,kind:'drum',trackId:track.id,slotId};}
+  }
+  return tw391OldResolveSoundTarget();
+};
+playSample=async function(track,pitch,dur,velocity=.8){
+  const assetId=track.instrument?.sampleId;if(!assetId)return;try{await ensureAudio();const asset=await idbGet('assets',assetId),buffer=await decodeAsset(assetId);if(!asset||!buffer)throw new Error('Cached source is missing');const bounds=tw391Bounds(buffer,asset,asset),meta=tw391Meta(asset,asset),root=tw391Num(track.instrument?.rootMidi,tw391Num(asset.rootMidi,60)),rate=Math.pow(2,(tw391Num(pitch,root)-root+meta.tune)/12),source=tw391Start(engine.ctx,buffer,engine.trackNodes.get(track.id)?.input||engine.master,bounds,meta,engine.ctx.currentTime,rate,tw391Num(velocity,.8)*meta.gain,Math.min(bounds.duration,Math.max(TW391_MIN_SAMPLE_SECONDS,tw391Num(dur,.35)*rate+.2)));tw37TrackSource(source);}catch(err){console.error('Safe sampler playback failed',err);toast('Sampler recovered','An invalid edit was ignored and the untouched source remains available. Reopen Edit Sampler and press Reset edits.','error');try{return tw36PlaySample(track,pitch,dur,velocity);}catch(_){}}
+};
+tw37PlayDrumHit=async function(track,pitch,velocity=.8,sessionId=null){
+  await ensureAudio();if(sessionId!==null&&(!engine.playing||sessionId!==engine.playbackSession))return;const lane=TW37_DRUM_BY_PITCH.get(Math.round(pitch));if(!lane)return;const slot=tw37DrumSlot(track,lane.id),destination=engine.trackNodes.get(track.id)?.input||engine.master;if(!slot?.assetId)return tw37ScheduleBuiltinDrum(engine.ctx,destination,lane.id,engine.ctx.currentTime,velocity,track.drumRack?.kit||'studio');
+  try{const asset=await idbGet('assets',slot.assetId),buffer=await decodeAsset(slot.assetId);if(!asset||!buffer)throw new Error('Cached drum source is missing');const bounds=tw391Bounds(buffer,slot,asset),meta=tw391Meta(slot,asset),rate=Math.pow(2,meta.tune/12),source=tw391Start(engine.ctx,buffer,destination,bounds,meta,engine.ctx.currentTime,rate,tw391Num(velocity,.8)*meta.gain);tw37TrackSource(source);}catch(err){console.error('Safe drum playback failed',err);tw37ScheduleBuiltinDrum(engine.ctx,destination,lane.id,engine.ctx.currentTime,velocity,track.drumRack?.kit||'studio');toast('Drum sample recovered','The unsafe custom edit was bypassed and the built-in drum played instead.','error');}
+};
+tw37PreviewTrim=async function(){
+  if(!tw37TrimTarget||!tw37TrimBuffer)return;await ensureAudio();const start=tw391Clamp(els.trimStartInput.value,0,tw37TrimBuffer.duration,0),end=tw391Clamp(els.trimEndInput.value,TW391_MIN_SAMPLE_SECONDS,tw37TrimBuffer.duration,tw37TrimBuffer.duration),bounds=end-start>=TW391_MIN_SAMPLE_SECONDS?{start,end,duration:end-start}:{start:0,end:tw37TrimBuffer.duration,duration:tw37TrimBuffer.duration},owner=tw39TrimOwner?.owner||tw39TrimOwner?.asset||{},asset=tw39TrimOwner?.asset||{},meta={...tw391Meta(owner,asset),gain:tw391Clamp(els.tw39TrimGain?.value,0,2,1),tune:tw391Clamp(els.tw39TrimTune?.value,-24,24,0),fadeIn:tw391Clamp((+els.tw39TrimFadeIn?.value||0)/1000,0,2,.003),fadeOut:tw391Clamp((+els.tw39TrimFadeOut?.value||0)/1000,0,3,.02),reverse:!!els.tw39TrimReverse?.checked};try{const source=tw391Start(engine.ctx,tw37TrimBuffer,engine.master,bounds,meta,engine.ctx.currentTime,Math.pow(2,meta.tune/12),meta.gain);tw37TrackSource(source);}catch(err){toast('Preview range repaired','Cut 1 and Cut 2 were reset because the selected range could not play.','error');els.trimStartInput.value=0;els.trimEndInput.value=tw37TrimBuffer.duration;tw37UpdateTrimUI();}
+};
+tw37PreviewAsset=async function(asset,owner={}){await ensureAudio();const buffer=await decodeAsset(asset.id);if(!buffer)return;const bounds=tw391Bounds(buffer,owner,asset),meta=tw391Meta(owner,asset);try{const source=tw391Start(engine.ctx,buffer,engine.master,bounds,meta,engine.ctx.currentTime,Math.pow(2,meta.tune/12),meta.gain);tw37TrackSource(source);}catch(err){console.warn(err);}}
+const tw391OldApplyTrim=tw37ApplyTrim;
+tw37ApplyTrim=async function(){
+  if(!tw37TrimTarget||!tw37TrimBuffer)return;const asset=await idbGet('assets',tw37TrimTarget.assetId);if(!asset)return toast('Sample unavailable','The original cached audio could not be found.','error');const original={name:asset.name,rootMidi:asset.rootMidi,gain:asset.gain,tune:asset.tune,fadeIn:asset.fadeIn,fadeOut:asset.fadeOut,reverse:asset.reverse,trimStart:asset.trimStart,trimEnd:asset.trimEnd};let slot=null,slotOriginal=null;
+  if(tw37TrimTarget.trackId&&tw37TrimTarget.slotId){const track=project.tracks.find(t=>t.id===tw37TrimTarget.trackId);slot=tw37DrumSlot(track,tw37TrimTarget.slotId);if(slot)slotOriginal={...slot};}
+  try{
+    const total=tw37TrimBuffer.duration,start=tw391Clamp(els.trimStartInput.value,0,Math.max(0,total-TW391_MIN_SAMPLE_SECONDS),0),end=tw391Clamp(els.trimEndInput.value,TW391_MIN_SAMPLE_SECONDS,total,total);if(end-start<TW391_MIN_SAMPLE_SECONDS)throw new Error('Cut 1 and Cut 2 are too close together');
+    asset.name=(els.tw39TrimName?.value||asset.name||'Sample').trim();asset.rootMidi=Math.round(tw391Clamp(els.tw39TrimRoot?.value,24,96,60));asset.gain=tw391Clamp(els.tw39TrimGain?.value,0,2,1);asset.tune=tw391Clamp(els.tw39TrimTune?.value,-24,24,0);asset.fadeIn=tw391Clamp((+els.tw39TrimFadeIn?.value||0)/1000,0,2,.003);asset.fadeOut=tw391Clamp((+els.tw39TrimFadeOut?.value||0)/1000,0,3,.02);asset.reverse=!!els.tw39TrimReverse?.checked;
+    if(slot){slot.trimStart=start;slot.trimEnd=end;slot.gain=asset.gain;slot.tune=asset.tune;slot.fadeIn=asset.fadeIn;slot.fadeOut=asset.fadeOut;slot.reverse=asset.reverse;}else{asset.trimStart=start;asset.trimEnd=end;}
+    await idbPut('assets',asset);engine.assetBuffers.delete(asset.id);const verified=await decodeAsset(asset.id);if(!verified||verified.duration<TW391_MIN_SAMPLE_SECONDS)throw new Error('The cached source could not be decoded after saving');tw391Bounds(verified,slot||asset,asset);
+    project?.tracks.filter(t=>t.type==='sampler'&&t.instrument?.sampleId===asset.id).forEach(t=>t.instrument.rootMidi=asset.rootMidi);markDirty();await renderAssets();tw37RenderDrumPads();renderTrackList();tw37CloseTrimEditor();toast('Sampler edit applied',`Playable range ${start.toFixed(3)}s → ${end.toFixed(3)}s verified successfully.`);
+  }catch(err){Object.assign(asset,original);await idbPut('assets',asset);if(slot&&slotOriginal)Object.assign(slot,slotOriginal);engine.assetBuffers.delete(asset.id);console.error('Sampler edit rolled back',err);toast('Edit rolled back',`${err.message}. Your previous playable sample was restored.`,'error');}
+};
+const tw391OldOfflineNote=renderOfflineMidiNote;
+renderOfflineMidiNote=async function(off,track,clip,note,input,sampleBuffer=null){
+  const absolute=clip.startBeat+note.start,time=beatToSeconds(absolute),noteDuration=Math.max(.04,beatToSeconds(absolute+note.duration)-time);
+  if(track.type==='drum'){const lane=TW37_DRUM_BY_PITCH.get(Math.round(note.pitch));if(!lane)return;const slot=tw37DrumSlot(track,lane.id);if(!slot?.assetId)return tw37ScheduleBuiltinDrum(off,input,lane.id,time,note.velocity/127,track.drumRack?.kit||'studio');const asset=await idbGet('assets',slot.assetId),buffer=await getBufferForOffline(slot.assetId,off);if(!asset||!buffer)return;const bounds=tw391Bounds(buffer,slot,asset),meta=tw391Meta(slot,asset),rate=Math.pow(2,meta.tune/12);try{tw391Start(off,buffer,input,bounds,meta,time,rate,note.velocity/127*meta.gain);}catch(_){tw37ScheduleBuiltinDrum(off,input,lane.id,time,note.velocity/127,track.drumRack?.kit||'studio');}return;}
+  if(track.type==='sampler'&&track.instrument?.sampleId){const asset=await idbGet('assets',track.instrument.sampleId),buffer=sampleBuffer||await getBufferForOffline(track.instrument.sampleId,off);if(!asset||!buffer)return;const pitch=effectiveMidiAtBeat(note.pitch,absolute),bounds=tw391Bounds(buffer,asset,asset),meta=tw391Meta(asset,asset),root=tw391Num(track.instrument.rootMidi,tw391Num(asset.rootMidi,60)),rate=Math.pow(2,(pitch-root+meta.tune)/12);try{tw391Start(off,buffer,input,bounds,meta,time,rate,note.velocity/127*meta.gain,Math.min(bounds.duration,noteDuration*rate));}catch(_){}return;}
+  return tw391OldOfflineNote(off,track,clip,note,input,sampleBuffer);
+};
+const tw391OldBindUI=bindUI;
+bindUI=function(){tw391OldBindUI();if(!document.getElementById('tw391ResetSampleEdits')){const button=document.createElement('button');button.id='tw391ResetSampleEdits';button.className='btn ghost';button.textContent='Reset edits';button.dataset.tooltip='Restore the full untouched recording, normal direction, unity gain, zero tuning and safe edge fades.';button.onclick=()=>{if(!tw37TrimBuffer)return;els.trimStartInput.value=0;els.trimEndInput.value=tw37TrimBuffer.duration;els.tw39TrimGain.value=1;els.tw39TrimTune.value=0;els.tw39TrimFadeIn.value=3;els.tw39TrimFadeOut.value=20;els.tw39TrimReverse.checked=false;tw37UpdateTrimUI();};els.autoTrimSampleBtn.parentElement.insertBefore(button,els.autoTrimSampleBtn);}};
+const tw391OldOpenStudio=openStudio;
+openStudio=async function(){tw391RepairProjectSlots();await tw391RepairLibrary();return tw391OldOpenStudio();};
+const tw391OldInit=init;
+init=async function(){await tw391OldInit();await tw391RepairLibrary();document.querySelector('.build-badge')?.replaceChildren('3.9.1');};
+
+/* ===== End TempoWeave 3.9.1 sampler safety repair ===== */
+</script>
+<script>
+const fileInput=document.getElementById('sourceFile'),status=document.getElementById('status'),again=document.getElementById('again');
+function setStatus(message,type=''){status.textContent=message;status.className='status '+type;}
+function download(name,text){const blob=new Blob([text],{type:'text/html'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);}
+fileInput.addEventListener('change',async()=>{const file=fileInput.files[0];if(!file)return;setStatus('Reading '+file.name+'…');try{const source=await file.text();if(!/TempoWeave/.test(source)||!source.includes('tw39StartBuffer')||!source.includes('/* ---------- Init ---------- */'))throw new Error('That is not the TempoWeave 3.9 standalone build.');if(source.includes('TempoWeave 3.9.1 — sampler safety repair'))throw new Error('This file already contains the 3.9.1 sampler repair.');const marker='/* ---------- Init ---------- */',index=source.lastIndexOf(marker);if(index<0)throw new Error('Could not locate the safe injection point.');const patch=document.getElementById('twPatch').textContent,updated=(source.slice(0,index)+patch+'\n'+source.slice(index)).replace(/<em class="build-badge">3\.9<\/em>/,'<em class="build-badge">3.9.1</em>').replace(/TempoWeave 3\.9/g,'TempoWeave 3.9.1');const name='TempoWeave_Studio_v3.9.1_SamplerRepair_Standalone.html';download(name,updated);setStatus('REPAIR COMPLETE\nDownloaded: '+name+'\nOpen the new file. It automatically repairs unsafe sample metadata when the library or a project opens.','ok');again.disabled=false;}catch(error){console.error(error);setStatus('REPAIR FAILED\n'+error.message,'bad');again.disabled=false;}});
+again.onclick=()=>{fileInput.value='';fileInput.click();};
+</script>
+</body>
+</html>
