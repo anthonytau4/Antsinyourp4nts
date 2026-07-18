@@ -1,0 +1,63 @@
+name: Validate TempoWeave sampler repair
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [tempoweave-sampler-repair-download]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repair utility
+        uses: actions/checkout@v4
+
+      - name: Validate embedded JavaScript
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'TempoWeave_3.9.1_Sampler_Repair_Utility.html';
+          const html = fs.readFileSync(path, 'utf8');
+          if (!html.includes('TempoWeave 3.9.1 — sampler safety repair')) throw new Error('Repair payload missing');
+          const scripts = [...html.matchAll(/<script(?:\s+type="([^"]+)")?[^>]*>([\s\S]*?)<\/script>/gi)];
+          if (scripts.length < 2) throw new Error('Expected repair payload and utility script');
+          for (const [, type, code] of scripts) {
+            if (!type || type === 'text/javascript' || type === 'module' || type === 'text/plain') {
+              new Function(code);
+            }
+          }
+          const patch = scripts.find(([, type]) => type === 'text/plain')?.[2] || '';
+          const required = ['tw391Bounds','tw37ApplyTrim','playSample','renderOfflineMidiNote','Reset edits'];
+          for (const token of required) if (!patch.includes(token)) throw new Error(`Missing ${token}`);
+          console.log(`Validated ${scripts.length} embedded scripts and ${patch.length} repair characters.`);
+          NODE
+
+      - name: Build download package
+        shell: bash
+        run: |
+          mkdir -p package
+          cp TempoWeave_3.9.1_Sampler_Repair_Utility.html package/
+          cat > package/README.txt <<'TXT'
+          TEMPOWEAVE 3.9.1 SAMPLER REPAIR
+
+          1. Double-click TempoWeave_3.9.1_Sampler_Repair_Utility.html.
+          2. Select your TempoWeave_Studio_v3.9_Standalone.html file.
+          3. The utility downloads TempoWeave_Studio_v3.9.1_SamplerRepair_Standalone.html.
+          4. Open that new HTML. The original 3.9 file is never overwritten.
+
+          The repaired build validates both trim markers, repairs unsafe saved ranges,
+          keeps the original audio Blob and sample ID intact, rolls back failed edits,
+          and shares one safe playback path between preview, live playback and WAV export.
+          TXT
+
+      - name: Upload repair package
+        uses: actions/upload-artifact@v4
+        with:
+          name: TempoWeave-3.9.1-Sampler-Repair
+          path: package/
+          retention-days: 7
